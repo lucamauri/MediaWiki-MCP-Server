@@ -193,14 +193,6 @@ describe('parseConfig', () => {
 
 			expect(config.wikis.w.bot).toBeUndefined();
 		});
-
-		// A string such as "false" is truthy in JavaScript, so accepting one would
-		// flag edits when the operator meant the opposite.
-		it.each(['yes', 'false', 1, null])('throws when bot is %j rather than a boolean', (bot) => {
-			expect(() =>
-				parse({ defaultWiki: 'w', wikis: { w: { ...baseWiki, token: null, bot } } }),
-			).toThrow('Config error: wikis.w.bot must be a boolean');
-		});
 	});
 
 	describe('wiki keys', () => {

@@ -141,7 +141,7 @@ A change [`tags`](#change-tags-tags) value keeps MCP writes identifiable without
 
 ## Bot edits (`bot`)
 
-Set `bot` to `true` to mark a wiki's edits as bot edits, which Special:RecentChanges hides by default. With no `bot` setting, no edit is flagged.
+Set `bot` to `true` to mark a wiki's edits as bot edits, which Special:RecentChanges hides by default. Without it, only a call's own `bot: true` flags an edit. On an HTTP server shared by several users, the setting applies to all of them.
 
 ```json
 {
@@ -153,9 +153,9 @@ Set `bot` to `true` to mark a wiki's edits as bot edits, which Special:RecentCha
 }
 ```
 
-The setting applies to `create-page`, `update-page`, `wikibase-edit-entity` and `wikibase-add-statement`. The other write tools have no bot flag. Each of these four tools also takes a `bot` input. When a call gives one, it wins over the setting in both directions: `bot: false` leaves a single edit unflagged on a wiki that flags every edit.
+The setting applies to `create-page`, `update-page`, `wikibase-edit-entity` and `wikibase-add-statement`. The other write tools have no bot flag. A call's own `bot` input wins in both directions: `bot: false` leaves one edit unflagged on a wiki that flags every edit.
 
-The flag takes effect only when the account has the `bot` right: membership of the bot group, or the **High-volume editing** grant on a bot password or OAuth consumer. Without the right, the wiki saves the edit unflagged and does not return an error. A write that asked for the flag reports `botMarked` in its response, `false` when the account lacked the right.
+The flag takes effect only when the account has the `bot` right, and a bot password or OAuth consumer also needs the **High-volume (bot) access** grant. Without them the wiki saves the edit unflagged and returns no error; a write that asked for the flag reports `botMarked: false`.
 
 ## Upload directories
 

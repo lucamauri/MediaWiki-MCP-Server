@@ -31,6 +31,8 @@ interface WikiState {
 	editFailure?: Error;
 	/** The change tags the wiki is configured to add to every write. */
 	tags?: string;
+	/** The wikitext a read of the section returns. */
+	sectionWikitext?: string;
 }
 
 // A mock wiki behind the real edit service. It answers an edit with `response`
@@ -49,6 +51,11 @@ function fakeEdit(response: unknown = successResponse(), wiki: WikiState = {}) {
 				throw wiki.editFailure;
 			}
 			return response;
+		}
+		if (params.prop === 'revisions' && wiki.sectionWikitext !== undefined) {
+			return {
+				query: { pages: [{ revisions: [{ slots: { main: { content: wiki.sectionWikitext } } }] }] },
+			};
 		}
 		return {};
 	});
@@ -78,8 +85,9 @@ const JAPAN_OUTLINE: SectionEntry[] = [
 function fakeEditWithOutline(
 	outline: SectionEntry[] = JAPAN_OUTLINE,
 	sourceSections?: SectionEntry[],
+	wiki: WikiState = {},
 ) {
-	const base = fakeEdit();
+	const base = fakeEdit(successResponse(), wiki);
 	const list = vi.fn().mockResolvedValue(outline);
 	const listInSource =
 		sourceSections === undefined
@@ -107,11 +115,14 @@ function fakeFindReplace(current: string = PAGE, revid = 41) {
 	});
 }
 
-// A wiki holding `page`: the read gets it back, and the write goes to fakeEdit's.
+// A wiki holding `page`: the read gets it back, and the write and the rights
+// check go to fakeEdit's.
 function fakeFindReplaceOf(page: object) {
 	const base = fakeEdit();
-	const request = vi.fn(async (params: { action?: string }) =>
-		params.action === 'query' ? { query: { pages: [page] } } : base.request(params),
+	const request = vi.fn(async (params: { action?: string; meta?: string }) =>
+		params.action === 'query' && params.meta === undefined
+			? { query: { pages: [page] } }
+			: base.request(params),
 	);
 	const mock = createMockMwn({
 		request,
@@ -119,7 +130,9 @@ function fakeFindReplaceOf(page: object) {
 	});
 	const ctx = contextOn(mock, { edit: base.ctx.edit });
 	const pageReads = (): Record<string, unknown>[] =>
-		request.mock.calls.map(([params]) => params).filter((params) => params.action === 'query');
+		request.mock.calls
+			.map(([params]) => params)
+			.filter((params) => params.action === 'query' && params.meta === undefined);
 	return { ...base, ctx, pageReads };
 }
 
@@ -771,6 +784,131 @@ describe('update-page', () => {
 	});
 });
 
+describe('update-page section heading', () => {
+	async function replaceFirstSection(source: string, sectionWikitext = '== Etymology ==\nOld.') {
+		const fake = fakeEditWithOutline(JAPAN_OUTLINE, [], { sectionWikitext });
+		const result = await callTool(fake.ctx, 'update-page', {
+			title: 'Japan',
+			source,
+			section: 1,
+			latestId: 41,
+		});
+		return { ...fake, result };
+	}
+
+	const sectionReads = (request: ReturnType<typeof fakeEdit>['request']) =>
+		request.mock.calls.map(([params]) => params).filter((params) => params.prop === 'revisions');
+
+	it('refuses a source that does not begin with a heading, quoting the one to keep', async () => {
+		const { edits, result } = await replaceFirstSection(
+			'Rewritten.',
+			"== ''R&D'' at [[Target|Linked]] ==\nOld.",
+		);
+
+		const envelope = assertStructuredError(result, 'invalid_input');
+		expect(envelope.message).toContain("\"== ''R&D'' at [[Target|Linked]] ==\"");
+		expect(edits()).toHaveLength(0);
+	});
+
+	it('refuses text before the heading', async () => {
+		const { edits, result } = await replaceFirstSection('Intro.\n\n== Etymology ==\nBody.');
+
+		assertStructuredError(result, 'invalid_input');
+		expect(edits()).toHaveLength(0);
+	});
+
+	it.each([
+		['an indented heading, which is preformatted text', ' == Etymology ==\nBody.'],
+		['an indented heading after a blank line', '\n == Etymology ==\nBody.'],
+		['text after the closing marks', '== Etymology == The name.\nBody.'],
+		['no closing marks', '== Etymology\nBody.'],
+		['a formula', '=2+2\nBody.'],
+		['marks alone', '==\nBody.'],
+		['a comment before the marks on the same line', '<!-- c -->== Etymology ==\nBody.'],
+		['text after a comment on the heading line', '== Etymology == <!-- c --> The name.'],
+	])('refuses a source opening with %s', async (_label, source) => {
+		const { edits, result } = await replaceFirstSection(source);
+
+		assertStructuredError(result, 'invalid_input');
+		expect(edits()).toHaveLength(0);
+	});
+
+	it.each([
+		['a heading', '== Etymology ==\nBody.'],
+		['blank lines before the heading', '\n \n== Etymology ==\nBody.'],
+		['Windows line endings', '\r\n== Etymology ==\r\nBody.'],
+		['spaces after the heading', '== Etymology ==  \nBody.'],
+		['a comment after the heading', '== Etymology == <!-- a=b -->\nBody.'],
+		['a comment left open after the heading', '== Etymology == <!-- a\nb -->\nBody.'],
+		['a comment inside the heading', '== Ety<!-- c -->mology ==\nBody.'],
+		['a renamed heading', '== Origins ==\nBody.'],
+		['a heading at another level', '=== Etymology ===\nBody.'],
+		['a further heading, which splits the section', '== Etymology ==\nA.\n\n== Origins ==\nB.'],
+		['nothing, which deletes the section', ''],
+		['only whitespace, which deletes the section', ' \n'],
+	])('writes a source holding %s', async (_label, source) => {
+		const { edits, result } = await replaceFirstSection(source);
+
+		assertStructuredSuccess(result);
+		expect(edits()).toHaveLength(1);
+	});
+
+	it('asks for the heading before the subsections', async () => {
+		const { ctx } = fakeEditWithOutline(JAPAN_OUTLINE, [], {
+			sectionWikitext: '== History ==\nOld.',
+		});
+
+		const result = await callTool(ctx, 'update-page', {
+			title: 'Japan',
+			source: 'Rewritten.',
+			section: 2,
+			latestId: 41,
+		});
+
+		const envelope = assertStructuredError(result, 'invalid_input');
+		expect(envelope.message).toContain('"== History =="');
+	});
+
+	it('reads nothing of its own for a source that begins with a heading', async () => {
+		const { request } = await replaceFirstSection('== Etymology ==\nBody.');
+
+		expect(sectionReads(request)).toHaveLength(0);
+	});
+
+	it('quotes the heading as numbered at latestId', async () => {
+		const { request } = await replaceFirstSection('Rewritten.');
+
+		expect(sectionReads(request)[0]).toMatchObject({ revids: 41, rvsection: 1 });
+	});
+
+	it('leaves a section the revision does not report to the edit', async () => {
+		const { edits, ctx } = fakeEditWithOutline();
+
+		await callTool(ctx, 'update-page', {
+			title: 'Japan',
+			source: 'Rewritten.',
+			section: 1,
+			latestId: 41,
+		});
+
+		expect(edits()).toHaveLength(1);
+	});
+
+	it.each([
+		['the lead', { source: 'Rewritten.', section: 0 }],
+		['a whole page', { source: 'Rewritten.' }],
+		['an append to a section', { source: '\n\nMore.', section: 1, operation: 'append' }],
+		['a prepend to a section', { source: 'More.\n\n', section: 1, operation: 'prepend' }],
+	])('does not ask for a heading on %s', async (_label, args) => {
+		const { edits, ctx } = fakeEditWithOutline(JAPAN_OUTLINE, [], { sectionWikitext: 'Old.' });
+
+		const result = await callTool(ctx, 'update-page', { title: 'Japan', ...args });
+
+		assertStructuredSuccess(result);
+		expect(edits()).toHaveLength(1);
+	});
+});
+
 describe('update-page find-replace', () => {
 	it('rewrites the single match and submits the whole target', async () => {
 		const { edits, ctx } = fakeFindReplace();
@@ -1007,7 +1145,7 @@ describe('update-page find-replace', () => {
 	it('carries the comment and the bot flag like every other write', async () => {
 		const { edits, ctx } = fakeFindReplace();
 
-		await callTool(ctx, 'update-page', {
+		const result = await callTool(ctx, 'update-page', {
 			title: 'My Page',
 			operation: 'find-replace',
 			find: 'founded in 1104',
@@ -1018,6 +1156,7 @@ describe('update-page find-replace', () => {
 
 		expect(edits()[0]).toMatchObject({ bot: true });
 		expect(edits()[0].summary).toContain('date correction');
+		expect(assertStructuredSuccess(result)).toContain('Bot marked: true');
 	});
 
 	// The subsection guard exists for a replace, which takes the subtree with it.
@@ -1423,7 +1562,7 @@ describe('update-page unread content guard', () => {
 
 		await callTool(ctx, 'update-page', {
 			title: 'My Page',
-			source: 'short',
+			source: '== Short ==',
 			section: 1,
 			latestId: 41,
 		});
@@ -1497,7 +1636,7 @@ describe('update-page unread content guard', () => {
 
 		const result = await callTool(ctx, 'update-page', {
 			title: 'My Page',
-			source: 'short',
+			source: '== Short ==',
 			section: 1,
 			latestId: 41,
 		});

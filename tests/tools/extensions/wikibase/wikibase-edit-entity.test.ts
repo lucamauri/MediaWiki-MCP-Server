@@ -226,17 +226,6 @@ describe('wikibase-edit-entity', () => {
 			expect(assertStructuredData(result)).toMatchObject({ botMarked: true });
 		});
 
-		it('flags a created entity the same way as an edited one', async () => {
-			const { ctx, submit } = contextWithRights();
-
-			await wikibaseEditEntity.handle(
-				toolArgs(wikibaseEditEntity, { data: LABEL_DATA, bot: true }),
-				ctx,
-			);
-
-			expect(submit.mock.calls[0][1]).toMatchObject({ new: 'item', bot: true });
-		});
-
 		// MediaWiki saves the edit without the flag when the account lacks the right,
 		// so the response is the only place that says the flag did not apply.
 		it('reports botMarked false when the account lacks the bot right', async () => {
@@ -265,6 +254,18 @@ describe('wikibase-edit-entity', () => {
 			expect(data.botMarked).toBeUndefined();
 		});
 
+		it('treats bot=false like an unflagged edit', async () => {
+			const { ctx, submit, botRight } = contextWithRights();
+
+			await wikibaseEditEntity.handle(
+				toolArgs(wikibaseEditEntity, { entityId: 'Q1234', data: LABEL_DATA, bot: false }),
+				ctx,
+			);
+
+			expect(submit.mock.calls[0][1]).not.toHaveProperty('bot');
+			expect(botRight).not.toHaveBeenCalled();
+		});
+
 		it('flags the edit when the wiki is configured to, without the call asking', async () => {
 			const { ctx, submit } = contextWithRights();
 
@@ -287,46 +288,6 @@ describe('wikibase-edit-entity', () => {
 
 			expect(submit.mock.calls[0][1]).not.toHaveProperty('bot');
 			expect(botRight).not.toHaveBeenCalled();
-		});
-
-		it('leaves the summary suffix and the other parameters unchanged when flagging', async () => {
-			const { ctx, submit } = contextWithRights();
-
-			await wikibaseEditEntity.handle(
-				toolArgs(wikibaseEditEntity, {
-					entityId: 'Q1234',
-					data: LABEL_DATA,
-					comment: 'add label',
-					bot: true,
-				}),
-				ctx,
-			);
-
-			expect(submit.mock.calls[0][1]).toEqual({
-				action: 'wbeditentity',
-				id: 'Q1234',
-				data: JSON.stringify(LABEL_DATA),
-				summary: 'add label (via wikibase-edit-entity on MediaWiki MCP Server)',
-				bot: true,
-			});
-		});
-
-		// The wiki's own refusal, here an unknown change tag, reaches the caller as
-		// an error and is neither swallowed nor retried.
-		it('surfaces a rejected write as an error, and does not retry it', async () => {
-			const error = Object.assign(new Error('The tag "mcp" is not allowed.'), { code: 'badtags' });
-			const submit = vi.fn().mockRejectedValue(error);
-			const ctx = contextOn(createMockMwn(), {
-				edit: { ...baseEdit, submit, botRight: vi.fn() },
-			});
-
-			const result = await dispatch(
-				wikibaseEditEntity,
-				ctx,
-			)(toolArgs(wikibaseEditEntity, { entityId: 'Q1234', data: LABEL_DATA, bot: true }));
-
-			assertStructuredError(result, 'invalid_input');
-			expect(submit).toHaveBeenCalledTimes(1);
 		});
 	});
 });

@@ -102,4 +102,10 @@ describe('resolveBotFlag', () => {
 			expect(resolveBotFlag(ctx, call)).toBe(expected);
 		},
 	);
+
+	it('does not flag an edit for a configured string such as "false"', () => {
+		const ctx = withWikiConfig(fakeContext(), { bot: 'false' as never });
+
+		expect(resolveBotFlag(ctx, undefined)).toBe(false);
+	});
 });

@@ -24,7 +24,7 @@ export async function submitPageEdit(
 	mwn: Mwn,
 	failureVerb: string,
 	params: Record<string, unknown>,
-	{ title, bot }: { readonly title: string; readonly bot?: boolean },
+	{ title }: { readonly title: string },
 ): Promise<CallToolResult> {
 	const response =
 		// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- mwn API response shape; trusted at this boundary
@@ -43,8 +43,7 @@ export async function submitPageEdit(
 		latestRevisionId: edit.newrevid,
 		latestRevisionTimestamp: edit.newtimestamp,
 		contentModel: edit.contentmodel,
-		// `bot` is the call's own input; the wiki's default applies when it is absent.
-		...(resolveBotFlag(ctx, bot) ? { botMarked: await ctx.edit.botRight(mwn) } : {}),
+		...(params.bot === true ? { botMarked: await ctx.edit.botRight(mwn) } : {}),
 		url: await buildPageUrl(ctx, resolvedTitle),
 	});
 }

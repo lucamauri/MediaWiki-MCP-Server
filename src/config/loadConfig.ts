@@ -102,14 +102,8 @@ export interface WikiConfig {
 	 */
 	attributeEdits?: boolean;
 	/**
-	 * Whether edits made through this MCP server are marked as bot edits by
-	 * default, so Special:RecentChanges hides them from people who hide bot
-	 * edits. Defaults to false: no edit is flagged unless this is set or a call
-	 * asks for it with its own `bot` input, which wins over this default in both
-	 * directions. It takes effect only on writes whose API module has a `bot`
-	 * parameter (page edits, `wbeditentity`, `wbcreateclaim`), and only when the
-	 * authenticated account holds the `bot` right; without the right MediaWiki
-	 * saves the edit unflagged, and the response reports `botMarked: false`.
+	 * Whether this wiki's page and Wikibase edits are marked as bot edits unless
+	 * the call's own `bot` input says otherwise. Defaults to false.
 	 */
 	bot?: boolean;
 }

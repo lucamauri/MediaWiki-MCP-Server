@@ -316,6 +316,18 @@ describe('wikibase-add-statement', () => {
 			expect(data.botMarked).toBeUndefined();
 		});
 
+		it('treats bot=false like an unflagged edit', async () => {
+			const { ctx, submit, botRight } = contextWithRights();
+
+			await wikibaseAddStatement.handle(
+				toolArgs(wikibaseAddStatement, { ...ARGS, bot: false }),
+				ctx,
+			);
+
+			expect(submit.mock.calls[0][1]).not.toHaveProperty('bot');
+			expect(botRight).not.toHaveBeenCalled();
+		});
+
 		it('flags the edit when the wiki is configured to, without the call asking', async () => {
 			const { ctx, submit } = contextWithRights();
 

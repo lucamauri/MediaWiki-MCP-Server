@@ -2,8 +2,8 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/server';
 import type { Tool } from '../../../runtime/tool.ts';
 import type { ToolContext } from '../../../runtime/context.ts';
+import { botArgSchema } from '../../../runtime/botArg.ts';
 import { formatEditComment, resolveBotFlag } from '../../../wikis/utils.ts';
-import { botInput } from './botInput.ts';
 
 const inputSchema = {
 	entityId: z
@@ -33,7 +33,7 @@ const inputSchema = {
 			'Removes everything the entity currently holds before applying data, instead of merging into it.',
 		),
 	comment: z.string().optional().describe('Edit summary, appended to the generated one.'),
-	bot: botInput,
+	bot: botArgSchema,
 } as const;
 
 interface EditEntityResponse {
@@ -61,9 +61,6 @@ export const wikibaseEditEntity: Tool<typeof inputSchema> = {
 	): Promise<CallToolResult> {
 		const mwn = await ctx.mwn();
 		const summary = formatEditComment(ctx, 'wikibase-edit-entity', comment);
-		// The call's `bot` input wins; otherwise the wiki's setting decides. Either
-		// way the parameter is sent only when true, so the default request is
-		// byte-for-byte what it was before the option existed.
 		const markAsBot = resolveBotFlag(ctx, bot);
 		const params: Record<string, string | number | boolean> = {
 			action: 'wbeditentity',
@@ -88,8 +85,6 @@ export const wikibaseEditEntity: Tool<typeof inputSchema> = {
 			entityId: entity.id,
 			entityType: entity.type,
 			latestRevisionId: entity.lastrevid,
-			// MediaWiki ignores `bot` without the right and still saves the edit, so
-			// say whether the flag applied. A failed probe leaves this out.
 			...(markAsBot ? { botMarked: await ctx.edit.botRight(mwn) } : {}),
 		});
 	},

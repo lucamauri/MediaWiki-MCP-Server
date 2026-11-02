@@ -6,14 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+### Breaking changes
+
+- The server now needs Node.js 22.19 or later (was 22.12). On Node.js 22.12–22.18 it fails at startup.
+- `update-page` now refuses a `section=N` replace whose source does not begin with a heading, and quotes the heading to keep. Empty sources, appends, prepends, `find-replace`, the lead and full-page replaces are exempt.
+
 ### Added
 
-- `wikibase-edit-entity` and `wikibase-add-statement` accept a `bot` parameter that marks the edit as a bot edit, and report `botMarked` when it is set. The flag takes effect only when the account has the `bot` right.
-- A per-wiki `bot` setting marks that wiki's edits as bot edits by default. Without it, nothing changes: no edit is flagged. See [docs/configuration.md](docs/configuration.md#bot-edits-bot).
-
-### Changed
-
-- On a wiki with `bot: true`, `create-page` and `update-page` flag an edit as a bot edit unless the call passes `bot: false`. Their behaviour is unchanged on a wiki without the setting.
+- `get-random-pages` tool that returns a random sample of wiki pages from one namespace, as Special:Random does for readers. It excludes redirects by default.
+- `wikibase-edit-entity` and `wikibase-add-statement` accept a `bot` parameter that marks the edit as a bot edit, and report `botMarked`, as `create-page` and `update-page` do.
+- A per-wiki `bot` setting marks the edits of `create-page`, `update-page`, `wikibase-edit-entity` and `wikibase-add-statement` as bot edits unless the call passes `bot: false`. Without it, nothing changes. See [docs/configuration.md](docs/configuration.md#bot-edits-bot).
 
 ## [0.20.1] - 2026-10-29
 
