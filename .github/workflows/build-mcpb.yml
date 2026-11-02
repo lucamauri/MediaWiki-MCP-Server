@@ -1,0 +1,61 @@
+# Personal build of the .mcpb bundle, for this fork only. It is not part of the
+# upstream pull request: it lives on the `my-build` branch.
+#
+# It runs on every push to `my-build`, or by hand from the Actions tab, and
+# leaves the bundle as a downloadable artifact on the run page.
+name: Build mcpb
+
+on:
+  push:
+    branches:
+      - my-build
+  workflow_dispatch:
+
+env:
+  # The version Claude Desktop shows for the extension. A semver pre-release of
+  # the upstream version, so a build of this branch cannot be mistaken for it.
+  BUNDLE_VERSION: 0.20.1-bot-1
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Only the copy on the runner changes; nothing is committed. `npm run
+      # bundle` copies mcpb/manifest.json to the repo root before packing, so
+      # this is the version the bundle carries.
+      - name: Set the bundle version
+        run: |
+          node -e "
+            const fs = require('fs');
+            const path = 'mcpb/manifest.json';
+            const manifest = JSON.parse(fs.readFileSync(path, 'utf8'));
+            manifest.version = process.env.BUNDLE_VERSION;
+            fs.writeFileSync(path, JSON.stringify(manifest, null, 2) + '\n');
+          "
+          grep '"version"' mcpb/manifest.json
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build MCP Bundle
+        run: npm run bundle
+
+      - name: Upload MCP Bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: mcpb-bundle-${{ env.BUNDLE_VERSION }}
+          path: '*.mcpb'
+          if-no-files-found: error
