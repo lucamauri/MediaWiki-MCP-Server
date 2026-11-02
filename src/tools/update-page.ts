@@ -4,7 +4,8 @@ import type { Mwn } from 'mwn';
 import type { Tool } from '../runtime/tool.ts';
 import type { ToolContext } from '../runtime/context.ts';
 import { sectionNotFound } from '../errors/tailoredErrors.ts';
-import { formatEditComment } from '../wikis/utils.ts';
+import { botArgSchema } from '../runtime/botArg.ts';
+import { formatEditComment, resolveBotFlag } from '../wikis/utils.ts';
 import { findReplaceSplice } from '../services/findReplace.ts';
 import { submitPageEdit } from '../services/pageEdit.ts';
 import { sectionHeadingError } from '../services/sectionHeadingGuard.ts';
@@ -73,12 +74,7 @@ const inputSchema = {
 		.describe(
 			"Deprecated older spelling of operation='append' and operation='prepend'. Send operation instead.",
 		),
-	bot: z
-		.boolean()
-		.optional()
-		.describe(
-			'Marks the edit as a bot edit, which Special:RecentChanges hides by default. Takes effect only when the authenticated account has the `bot` right (granted by the bot group, or by the high-volume grant on a bot password or OAuth consumer); without it the edit saves unflagged and the response reports botMarked: false. Use when performing bulk or automated edit runs, or when the user requests it.',
-		),
+	bot: botArgSchema,
 	removeUnreadContent: z
 		.boolean()
 		.optional()
@@ -180,7 +176,7 @@ function commonEditParams(
 		...(summary !== undefined ? { summary } : {}),
 		nocreate: true,
 		...(section !== undefined ? { section: String(section) } : {}),
-		...(bot === true ? { bot: true } : {}),
+		...(resolveBotFlag(ctx, bot) ? { bot: true } : {}),
 	};
 }
 
