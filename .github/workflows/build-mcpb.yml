@@ -14,7 +14,7 @@ on:
 env:
   # The version Claude Desktop shows for the extension. A semver pre-release of
   # the upstream version, so a build of this branch cannot be mistaken for it.
-  BUNDLE_VERSION: 0.20.1-bot-1
+  BUNDLE_VERSION: 0.20.1-bot-2
 
 jobs:
   build:
