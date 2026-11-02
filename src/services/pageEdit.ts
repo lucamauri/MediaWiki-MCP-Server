@@ -1,7 +1,7 @@
 import type { CallToolResult } from '@modelcontextprotocol/server';
 import type { Mwn } from 'mwn';
 import type { ToolContext } from '../runtime/context.ts';
-import { buildPageUrl, resolveBotFlag } from '../wikis/utils.ts';
+import { buildPageUrl } from '../wikis/utils.ts';
 
 /** The page a write lands on, or one of its sections as numbered at `latestId`. */
 export interface EditTarget {

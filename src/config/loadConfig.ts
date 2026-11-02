@@ -342,11 +342,6 @@ function resolveWiki(raw: unknown, wikiKey: string, env: NodeJS.ProcessEnv): Wik
 	if (resolved.readOnly !== undefined && typeof resolved.readOnly !== 'boolean') {
 		throw new Error(`Config error: wikis.${wikiKey}.readOnly must be a boolean`);
 	}
-	// Strict on purpose: a string such as "false" is truthy in JavaScript, so
-	// accepting it would flag edits as bot edits when the operator meant the opposite.
-	if (resolved.bot !== undefined && typeof resolved.bot !== 'boolean') {
-		throw new Error(`Config error: wikis.${wikiKey}.bot must be a boolean`);
-	}
 	// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- post-JSON.parse boundary; ajv-validated WikiConfig parsing is a separate follow-up
 	return resolved as unknown as WikiConfig;
 }
